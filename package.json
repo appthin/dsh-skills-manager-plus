@@ -1,0 +1,53 @@
+{
+  "name": "dsh-skills-manager-plus",
+  "version": "0.1.0",
+  "description": "Skills & commands manager settings page for DeepSeek Harness: view, enable/disable, edit, delete and add skills, plus save reusable prompts as /commands — all from the browser.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/appthin/dsh-skills-manager-plus"
+  },
+  "author": "appthin",
+  "engines": {
+    "dsh": ">=0.1.5-rc.1",
+    "node": ">=24.2.0"
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "screenshot*.jpg",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/run.mjs"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "skills",
+    "slash-commands"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  }
+}

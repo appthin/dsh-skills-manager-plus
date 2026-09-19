@@ -1,0 +1,9 @@
+# dsh-skills-manager-plus bundle patch: inserts this plugin into a profile's
+# layer stack. The host half (lib/index.js) serves the management API on the
+# loopback web server and registers saved prompts as slash commands on the
+# `commands` registry; the `dsh.client` declaration in package.json makes the
+# web app load lib/client.js as the browser half, which registers the
+# "技能与命令" (Skills & Commands) page in the settings sidebar.
+- insert:
+    - id: skills-manager-plus
+      name: dsh-skills-manager-plus
