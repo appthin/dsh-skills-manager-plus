@@ -1,6 +1,6 @@
 {
   "name": "dsh-skills-manager-plus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Skills & commands manager settings page for DeepSeek Harness: view, enable/disable, edit, delete and add skills, plus save reusable prompts as /commands — all from the browser.",
   "license": "MIT",
   "type": "module",

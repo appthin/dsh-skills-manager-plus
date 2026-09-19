@@ -1,6 +1,6 @@
 # dsh-skills-manager-plus
 
-[English](README.en.md) | 中文 | [Changelog](CHANGELOG.md)
+[English](README.en.md) | [中文](README.md) | [Changelog](CHANGELOG.md)
 
 Skills & commands manager plugin for DeepSeek Harness. Adds a **"技能与命令" (Skills & Commands)** page to the left sidebar of the Settings screen, where you can view, enable/disable, edit, delete and add skills, and save frequent prompts as `/commands` that you invoke by typing `/`.
 

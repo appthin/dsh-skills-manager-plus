@@ -1,6 +1,10 @@
 # dsh-skills-manager-plus
 
-[English](README.en.md) | 中文 | [更新日志](CHANGELOG.md)
+[English](README.en.md) | [中文](README.md) | [更新日志](CHANGELOG.md)
+
+## 0.1.1 — 2026-09-19
+
+- 文档修正：英文版 README 与 CHANGELOG 顶部的「中文」切换链接已指向中文 README。
 
 ## 0.1.0 — 2026-09-19
 
