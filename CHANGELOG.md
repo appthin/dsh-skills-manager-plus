@@ -1,6 +1,16 @@
 # dsh-skills-manager-plus
 
-[English](README.en.md) | [中文](README.md) | [更新日志](CHANGELOG.md)
+[English](README.en.md) | [中文](README.md) | [更新日志]
+
+## 0.2.0 — 2026-09-22
+
+- 从压缩包安装技能：支持 zip / tar / tar.gz，自动识别常见技能包布局（GitHub「Download ZIP」包裹目录、skillhub 的根 `SKILL.md` 整包、嵌套包装目录），deflate(method 8) 压缩也能正确解出；安装后弹出结果窗，区分「成功 / 部分成功 / 没有可安装技能 / 失败」，列出已安装与跳过清单。
+- 安装更稳：跳过提示只报告**能解析出 frontmatter** 的技能候选——包装目录里的 `README.md`、`LICENSE.md` 等无 frontmatter 文件不再被误报为「跳过技能」。
+- 删除改用插件自己的确认弹窗（不再用浏览器原生 `window.confirm`），危险操作红色高亮、防重复点击。
+- 修复「项目级技能删除失败」：换用 rename→rm + 存在性校验 + PowerShell 回退，彻底清掉 `.deleting` 暂存目录。
+- 修复「选中某个项目后页面空白」：扫描跳过隐藏目录、无 `SKILL.md` 目录给出具体名字、前端对空名字兜底。
+- 添加 / 从压缩包安装技能时，「保存位置」默认选中页面当前已选的项目。
+- 修复「保存位置」下拉看起来重复（项目同名时用父目录限定标签，根目录去重）。
 
 ## 0.1.1 — 2026-09-19
 

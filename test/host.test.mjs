@@ -12,7 +12,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { gzipSync, deflateRawSync } from 'node:zlib';
 
 const dir = mkdtempSync(join(tmpdir(), 'smp-host-'));
 process.env.DSH_HOME = join(dir, 'dsh');
@@ -24,6 +25,78 @@ const plugin = await import('../lib/index.js');
 const API_PREFIX = '/skills-manager-plus';
 const projectRoot = join(dir, 'proj-alpha');
 mkdirSync(projectRoot, { recursive: true });
+
+/**
+ * Build a zip whose entries are stored (method 0) by default, or deflated
+ * (`method: 8`) when an entry asks for it — the shape `zip -r` / Windows
+ * Compressed Folder writes for ordinary files, which is what re-checked real
+ * bundles (e.g. skillhub.cn) use. A `<dir>/` name is recorded as a directory
+ * marker, exactly as `zip -r` writes them.
+ */
+function makeZip(entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, 'utf8');
+    const raw = Buffer.from(entry.body, 'utf8');
+    const method = entry.method === 8 ? 8 : 0;
+    const body = method === 8 ? deflateRawSync(raw) : raw;
+    const local = Buffer.alloc(30 + name.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(method, 8); // stored or deflated
+    local.writeUInt32LE(body.length, 18);
+    local.writeUInt32LE(raw.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    name.copy(local, 30);
+    locals.push(local, body);
+
+    const central = Buffer.alloc(46 + name.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(method, 10);
+    central.writeUInt32LE(body.length, 20);
+    central.writeUInt32LE(raw.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    name.copy(central, 46);
+    centrals.push(central);
+    offset += local.length + body.length;
+  }
+  const cd = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(cd.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, cd, eocd]);
+}
+
+/** Build a ustar tar of regular files. */
+function makeTar(entries) {
+  const blocks = [];
+  for (const entry of entries) {
+    const body = Buffer.from(entry.body, 'utf8');
+    const header = Buffer.alloc(512);
+    header.write(entry.name, 0, 'utf8');
+    header.write('0000644\0', 100, 'utf8');
+    header.write('0000000\0', 108, 'utf8');
+    header.write('0000000\0', 116, 'utf8');
+    header.write(`${body.length.toString(8).padStart(11, '0')}\0`, 124, 'utf8');
+    header.write('00000000000\0', 136, 'utf8');
+    header.write('        ', 148, 'utf8');
+    header.write('0', 156, 'utf8');
+    header.write('ustar', 257, 'utf8');
+    header.write('00', 263, 'utf8');
+    blocks.push(header, body);
+    const pad = (512 - (body.length % 512)) % 512;
+    if (pad > 0) blocks.push(Buffer.alloc(pad));
+  }
+  blocks.push(Buffer.alloc(1024));
+  return Buffer.concat(blocks);
+}
 
 /** Boot the host half against a stub context, returning a request driver. */
 function boot() {
@@ -95,6 +168,33 @@ function boot() {
     return { status, payload: payload === null ? null : JSON.parse(payload) };
   }
 
+  /**
+   * POST raw bytes (an archive route must not JSON-encode its body), typically
+   * with query parameters for scope/project/fileName.
+   */
+  async function requestRaw(method, path, buffer) {
+    const req = {
+      method,
+      url: `${API_PREFIX}${path}`,
+      socket: { remoteAddress: '127.0.0.1' },
+      async *[Symbol.asyncIterator]() {
+        if (buffer !== undefined) yield buffer;
+      },
+    };
+    let status = 0;
+    let payload = null;
+    const res = {
+      writeHead(code) {
+        status = code;
+      },
+      end(text) {
+        payload = text === undefined ? '' : text;
+      },
+    };
+    await handler(req, res);
+    return { status, payload: payload === null ? null : JSON.parse(payload) };
+  }
+
   function dispose() {
     for (const cleanup of cleanups) {
       try {
@@ -105,7 +205,7 @@ function boot() {
     }
   }
 
-  return { request, registeredCommands, dispose };
+  return { request, requestRaw, registeredCommands, dispose };
 }
 
 test('loopback guard refuses remote requests with 403', async () => {
@@ -204,6 +304,24 @@ test('skills/remove deletes the skill file', async () => {
   dispose();
 });
 
+test('skills/remove deletes a project-scope skill through the registered workspace', async () => {
+  const { request, dispose } = boot();
+  const created = await request('POST', '/skills/save', {
+    scope: 'project',
+    project: projectRoot,
+    name: 'delta',
+    description: 'Delta project skill',
+    content: 'd',
+  });
+  assert.equal(created.status, 200);
+  const removed = await request('POST', '/skills/remove', { path: created.payload.path });
+  assert.equal(removed.status, 200);
+  assert.equal(removed.payload.action, 'removed');
+  assert.ok(!existsSync(created.payload.path));
+  assert.ok(!existsSync(dirname(created.payload.path)), 'the skill directory is gone too');
+  dispose();
+});
+
 test('commands/save then commands/toggle and commands/remove', async () => {
   const { request, registeredCommands, dispose } = boot();
   const created = await request('POST', '/commands/save', {
@@ -277,5 +395,110 @@ test('unknown route is a 404', async () => {
   const { request, dispose } = boot();
   const res = await request('GET', '/nope');
   assert.equal(res.status, 404);
+  dispose();
+});
+
+test('skills/install/archive installs from a real zip body and reports state', async () => {
+  const { requestRaw, dispose } = boot();
+  const zip = makeZip([
+    { name: 'repo-main/', body: '' },
+    { name: 'repo-main/LICENSE', body: 'mit' },
+    { name: 'repo-main/zipped/SKILL.md', body: '---\nname: zipped\ndescription: from a zip\n---\nbody\n' },
+  ]);
+  const res = await requestRaw('POST', '/skills/install/archive?scope=user&fileName=bundle.zip', zip);
+  assert.equal(res.status, 200);
+  assert.equal(res.payload.ok, true);
+  assert.deepEqual(res.payload.installed.map((s) => s.name), ['zipped']);
+  // Neither the `repo-main/` wrapper nor its LICENSE is a skill; the wrapper is
+  // peeled and the non-.md file is simply not a candidate, so nothing is
+  // reported as skipped.
+  assert.deepEqual(res.payload.skipped, []);
+  // The response carries refreshed state with the new skill in it.
+  assert.ok(res.payload.state.globalSkills.some((s) => s.name === 'zipped'));
+  assert.ok(existsSync(join(process.env.DSH_HOME, 'skills', 'zipped', 'SKILL.md')));
+  dispose();
+});
+
+test('skills/install/archive installs a tar.gz body', async () => {
+  const { requestRaw, dispose } = boot();
+  const tar = makeTar([{ name: 'tarball/SKILL.md', body: '---\nname: tarball\ndescription: from a tar\n---\nbody\n' }]);
+  const gz = gzipSync(tar);
+  const res = await requestRaw('POST', '/skills/install/archive?fileName=x.tar.gz', gz);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.payload.installed.map((s) => s.name), ['tarball']);
+  assert.ok(existsSync(join(process.env.DSH_HOME, 'skills', 'tarball', 'SKILL.md')));
+  dispose();
+});
+
+test('skills/install/archive installs a root-SKILL.md bundle (skillhub shape)', async () => {
+  // Regression: a skillhub.cn zip carries SKILL.md at its root beside resource
+  // folders. The lone `references/` folder used to be peeled as a wrapper while
+  // the root SKILL.md was ignored, so the route reported nothing installable.
+  const { requestRaw, dispose } = boot();
+  const zip = makeZip([
+    { name: 'references/', body: '' },
+    { name: 'references/writing-guide.md', body: 'guide' },
+    { name: 'SKILL.md', body: '---\nname: hub-skill\ndescription: from skillhub\n---\nbody\n' },
+    { name: '_meta.json', body: '{"slug":"hub-skill"}' },
+  ]);
+  const res = await requestRaw('POST', '/skills/install/archive?fileName=lsp.zip', zip);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.payload.installed.map((s) => s.name), ['hub-skill']);
+  assert.deepEqual(res.payload.skipped, []);
+  const skillDir = join(process.env.DSH_HOME, 'skills', 'hub-skill');
+  assert.ok(existsSync(join(skillDir, 'SKILL.md')));
+  // Resources land inside the skill, and the bundle is listed as a usable skill.
+  assert.ok(existsSync(join(skillDir, 'references', 'writing-guide.md')));
+  assert.ok(existsSync(join(skillDir, '_meta.json')));
+  const row = res.payload.state.globalSkills.find((s) => s.name === 'hub-skill');
+  assert.ok(row, 'the installed skill must appear in the refreshed state');
+  assert.equal(row.invalid, null, 'the installed skill must parse cleanly');
+  assert.equal(row.enabled, true);
+  dispose();
+});
+
+test('skills/install/archive installs a deflate (method 8) root-SKILL.md bundle', async () => {
+  // The lsp-novel-writer bundle from skillhub.cn is a deflate zip with SKILL.md
+  // at its root — the exact shape that historically read as "no installable
+  // skills" because its entries were compressed (method 8) and the lone
+  // references/ folder used to be stripped as a wrapper.
+  const { requestRaw, dispose } = boot();
+  const zip = makeZip([
+    { name: 'references/writing-guide.md', body: 'guide', method: 8 },
+    { name: 'SKILL.md', body: '---\nname: novel-writer\ndescription: 小说写作助手\n---\nbody\n', method: 8 },
+    { name: '_meta.json', body: '{"slug":"novel-writer"}', method: 8 },
+  ]);
+  const res = await requestRaw('POST', '/skills/install/archive?fileName=novel-writer-1.0.0.zip', zip);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.payload.installed.map((s) => s.name), ['novel-writer']);
+  assert.deepEqual(res.payload.skipped, []);
+  const skillDir = join(process.env.DSH_HOME, 'skills', 'novel-writer');
+  assert.ok(existsSync(join(skillDir, 'SKILL.md')));
+  assert.ok(existsSync(join(skillDir, 'references', 'writing-guide.md')));
+  assert.ok(existsSync(join(skillDir, '_meta.json')));
+  const row = res.payload.state.globalSkills.find((s) => s.name === 'novel-writer');
+  assert.ok(row, 'the deflated-installed skill must be listed');
+  assert.equal(row.invalid, null, 'its SKILL.md must parse cleanly after deflate');
+  dispose();
+});
+
+test('skills/install/archive rejects an unsupported body with a translated error', async () => {
+  const { requestRaw, dispose } = boot();
+  const res = await requestRaw('POST', '/skills/install/archive?fileName=x.rar', Buffer.from('definitely not an archive'));
+  assert.equal(res.status, 400);
+  assert.ok(/zip|tar/u.test(res.payload.error), `expected a format hint, got: ${res.payload.error}`);
+  dispose();
+});
+
+test('skills/install/archive refuses a project outside the registered roots', async () => {
+  const { requestRaw, dispose } = boot();
+  const zip = makeZip([{ name: 'a/SKILL.md', body: '---\nname: a\ndescription: d\n---\nx\n' }]);
+  const res = await requestRaw(
+    'POST',
+    `/skills/install/archive?scope=project&project=${encodeURIComponent(join(dir, 'not-registered'))}&fileName=x.zip`,
+    zip,
+  );
+  assert.equal(res.status, 400);
+  assert.ok(/roots|目录/u.test(res.payload.error));
   dispose();
 });

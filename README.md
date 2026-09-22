@@ -24,8 +24,9 @@
 | 展开预览 | 点开一行查看该技能正文的 Markdown 预览 |
 | 启用 / 停用 | 改写技能 frontmatter（模型可调用 / 用户可调用），目录监视器约一秒内热生效，无需重启 |
 | 编辑 | 名称、描述、何时使用、两个调用开关与正文，改名即重命名目录 |
-| 删除 | 移除技能的 `SKILL.md`（目录形式连同资源目录一起删除）|
-| 添加 | 创建一个新的 kebab-case 技能，保存到全局或某个项目 |
+| 删除 | 移除技能的 `SKILL.md`（目录形式连同资源目录一起删除），用插件自己的确认弹窗，危险操作红色高亮 |
+| 添加 | 创建一个新的 kebab-case 技能，保存到全局或某个项目；在「项目」标签下打开时默认选中当前项目 |
+| 从压缩包安装 | 选择 zip / tar / tar.gz，自动识别常见技能包布局（GitHub「Download ZIP」、skillhub 根 `SKILL.md` 整包），deflate 压缩也能解出；安装后弹出结果窗，列出已安装与跳过清单 |
 | 搜索 / 分页 | 按名称或描述搜索，每页 10 条 |
 | 命令 | 把常用提示词保存为 `/命令`，选中后即以用户消息发送给模型 |
 | 导入设置 | 一键启用 / 停用 `.agents` 技能目录（用户级与项目级），恢复时只还原本页停用的技能 |
@@ -106,14 +107,19 @@ DSH 的命令注册表，无需重启。
 ## 开发
 
 ```sh
-node test/run.mjs          # 全部测试（31 项，共三个套件）
+node test/run.mjs          # 全部测试（88 项，跨多个套件）
 ```
 
 | 套件 | 覆盖范围 |
 | --- | --- |
-| `test/store.test.mjs` | `skills.js` 与 `commands.js` 的纯逻辑：frontmatter 解析 / 改写、技能与命令的增删改、校验、根目录解析 |
-| `test/host.test.mjs` | 宿主端全部 HTTP 路由，用假的 Cordis 上下文驱动真实 `apply()`，覆盖 loopback 限制、`.agents` 开关 |
+| `test/store.test.mjs` | `skills.js` 与 `commands.js` 的纯逻辑：frontmatter 解析 / 改写、技能与命令的增删改、校验、根目录解析、压缩包安装 |
+| `test/archives.test.mjs` | zip / tar 包解析：目录标记、deflate(method 8)、zip64、中央目录 |
+| `test/host.test.mjs` | 宿主端全部 HTTP 路由，用假的 Cordis 上下文驱动真实 `apply()`，覆盖 loopback 限制、`.agents` 开关、压缩包安装 |
 | `test/client.test.mjs` | 浏览器 bundle 能否被 shell 加载并注册 `settings.section` 设置页面 |
+| `test/add-install-scope.test.mjs` | 添加 / 从压缩包安装弹窗的默认作用域（项目页打开时选中当前项目） |
+| `test/install-result.test.mjs` | 安装结果弹窗的四种结果与跳过清单渲染 |
+| `test/confirm.test.mjs` | 删除确认弹窗（替代 `window.confirm`）的渲染 |
+| `test/project-labels.test.mjs` | 项目标签去重 / 命名，与 zh/en i18n 占位符一致性 |
 
 测试不依赖任何测试框架，只用 Node 内置的 `node:test`。
 

@@ -1,6 +1,6 @@
 # dsh-skills-manager-plus
 
-[English](README.en.md) | [中文](README.md) | [Changelog](CHANGELOG.md)
+[English] | [中文](README.md) | [Changelog](CHANGELOG.md)
 
 Skills & commands manager plugin for DeepSeek Harness. Adds a **"技能与命令" (Skills & Commands)** page to the left sidebar of the Settings screen, where you can view, enable/disable, edit, delete and add skills, and save frequent prompts as `/commands` that you invoke by typing `/`.
 
@@ -22,8 +22,9 @@ Skills & commands manager plugin for DeepSeek Harness. Adds a **"技能与命令
 | Body preview | Expand a row to preview the skill body in Markdown |
 | Enable / disable | Rewrites skill frontmatter (model-invocable / user-invocable); the directory watcher picks it up live without a restart |
 | Edit | Name, description, when-to-use, the two invocation switches and the body; renaming renames the directory |
-| Delete | Removes the skill's `SKILL.md` (the resource directory too, for directory-form skills) |
-| Add | Creates a new kebab-case skill in the global scope or a chosen project |
+| Delete | Removes the skill's `SKILL.md` (the resource directory too, for directory-form skills); confirms in the plugin's own dialog with the danger action highlighted |
+| Add | Creates a new kebab-case skill in the global scope or a chosen project; opening it from the Project tab defaults to the selected project |
+| Install from archive | Pick a zip / tar / tar.gz; common skill-bundle layouts are recognized (GitHub "Download ZIP", skillhub root `SKILL.md` bundles) and deflate compression is decoded; a result popup lists what was installed and skipped |
 | Search / pagination | Filter by name or description; 10 rows per page |
 | Commands | Save a prompt as `/command`; picking one sends the prompt to the model as a user message |
 | Import settings | One-click enable / disable of the `.agents` skill directories (user and project), restoring only the skills this page disabled |
@@ -95,14 +96,19 @@ The plugin keeps one small state file (`$DSH_HOME/skills-manager-plus.json`) tra
 ## Development
 
 ```sh
-node test/run.mjs          # all tests (31) across three suites
+node test/run.mjs          # all tests (88) across several suites
 ```
 
 | Suite | Coverage |
 | --- | --- |
-| `test/store.test.mjs` | Pure logic of `skills.js` / `commands.js`: frontmatter parse/rewrite, skill & command CRUD, validation, root resolution |
-| `test/host.test.mjs` | All host HTTP routes via a fake Cordis context driving the real `apply()`, incl. loopback guard and the `.agents` switch |
+| `test/store.test.mjs` | Pure logic of `skills.js` / `commands.js`: frontmatter parse/rewrite, skill & command CRUD, validation, root resolution, archive install |
+| `test/archives.test.mjs` | zip / tar parsing: directory markers, deflate (method 8), zip64, central directory |
+| `test/host.test.mjs` | All host HTTP routes via a fake Cordis context driving the real `apply()`, incl. loopback guard, the `.agents` switch, archive install |
 | `test/client.test.mjs` | Loads the browser bundle like the shell does and asserts it registers a `settings.section` page |
+| `test/add-install-scope.test.mjs` | Default scope of the add / install-from-archive dialogs (opening from the Project tab selects the current project) |
+| `test/install-result.test.mjs` | The install-result popup's four outcomes and the skipped list |
+| `test/confirm.test.mjs` | The delete-confirmation dialog (replacing `window.confirm`) |
+| `test/project-labels.test.mjs` | Project label disambiguation / dedup, and zh/en i18n placeholder consistency |
 
 Tests use only Node's built-in `node:test`.
 
