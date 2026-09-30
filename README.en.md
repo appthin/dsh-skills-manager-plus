@@ -32,7 +32,7 @@ Skills & commands manager plugin for DeepSeek Harness. Adds a **"技能与命令
 
 ## Install
 
-**Requires:** DeepSeek Harness (DSH) ≥ 0.1.5-rc.1 (developed and tested on 0.1.6-alpha.1), which itself needs Node.js ≥ 24.2.0 and Git ≥ 2.31.0.
+**Requires:** DeepSeek Harness (DSH) ≥ 0.1.5-rc.1 (developed and verified on 0.1.6-alpha.1 and 0.2.0-rc.2), which itself needs Node.js ≥ 24.2.0 and Git ≥ 2.31.0.
 
 ### One-click install from the plugin market
 

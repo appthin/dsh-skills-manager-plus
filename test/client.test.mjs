@@ -32,7 +32,8 @@ function seededRequire(name) {
   throw new Error(`unexpected require("${name}"): not in the platform seed table`);
 }
 
-async function loadClientBundle() {
+async function loadClientBundle(options = {}) {
+  const { locale, navigatorLanguages } = options;
   const registrations = [];
   const effects = [];
   const styles = [];
@@ -72,6 +73,9 @@ async function loadClientBundle() {
     getItem: () => null,
     setItem: () => {},
   };
+  if (navigatorLanguages !== undefined) {
+    globalThis.navigator = { languages: navigatorLanguages, language: navigatorLanguages[0] };
+  }
 
   // The bundle references `window.__ModuleLoader__.load(...)`; run it.
   const source = readFileSync(bundlePath, 'utf8');
@@ -80,7 +84,9 @@ async function loadClientBundle() {
 
   const exports = captured;
   exports?.apply?.({
-    get() { return undefined; },
+    get(name) {
+      return name === 'locale' ? locale : undefined;
+    },
     effect(factory) { const dispose = factory(); effects.push(dispose); return dispose; },
     slots: {
       inject(slot, factory) {
@@ -121,4 +127,48 @@ test('client bundle loads and registers a settings.section page', async () => {
   for (const dispose of effects) {
     if (typeof dispose === 'function') dispose();
   }
+});
+
+/**
+ * A stand-in for the shell's `locale` service. The snapshot shape is the one
+ * both 0.1.6-alpha.1 and 0.2.0-rc.2 build: `{ active, locales, revision }`.
+ * It has never carried an `id` field, so reading `.id` yields `undefined`.
+ */
+function localeService(snapshot) {
+  return {
+    register: () => () => {},
+    subscribe: () => () => {},
+    getLocale: () => snapshot,
+  };
+}
+
+/** The nav label the page registers, which is translated from the active locale. */
+async function navLabelFor(options) {
+  const { registrations } = await loadClientBundle(options);
+  return registrations[0].label();
+}
+
+test('the nav label follows the shell locale reported as `active` (English)', async () => {
+  const label = await navLabelFor({ locale: localeService({ active: 'en', locales: [], revision: 1 }) });
+  assert.equal(label, 'Skills & Commands');
+});
+
+test('a Chinese shell locale selects the Chinese dictionary', async () => {
+  const label = await navLabelFor({ locale: localeService({ active: 'zh', locales: [], revision: 1 }) });
+  assert.equal(label, '技能与命令');
+});
+
+test('a regional tag is matched by its language subtag', async () => {
+  const label = await navLabelFor({ locale: localeService({ active: 'en-US', locales: [], revision: 1 }) });
+  assert.equal(label, 'Skills & Commands');
+});
+
+test('an unrecognizable snapshot falls back to the browser instead of pinning Chinese', async () => {
+  // A shape this build does not know must not silently become Chinese: the
+  // browser's own language list decides, exactly as it does before apply().
+  const label = await navLabelFor({
+    locale: localeService({ locales: [], revision: 1 }),
+    navigatorLanguages: ['en-US', 'en'],
+  });
+  assert.equal(label, 'Skills & Commands');
 });

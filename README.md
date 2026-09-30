@@ -34,7 +34,7 @@
 
 ## 安装说明
 
-**版本要求：** DeepSeek Harness（DSH）≥ 0.1.5-rc.1（在 0.1.6-alpha.1 上开发并测试）。DSH 自身依赖 Node.js ≥ 24.2.0 与 Git ≥ 2.31.0。
+**版本要求：** DeepSeek Harness（DSH）≥ 0.1.5-rc.1（已在 0.1.6-alpha.1 与 0.2.0-rc.2 上开发并验证）。DSH 自身依赖 Node.js ≥ 24.2.0 与 Git ≥ 2.31.0。
 
 ### 插件市场一键安装
 

@@ -2,6 +2,13 @@
 
 [English](README.en.md) | [中文](README.md) | [更新日志]
 
+## 0.2.1 — 2026-09-29
+
+- 兼容性核查：在 DeepSeek Harness **0.2.0-rc.2** 上完成逐项契约核对与线上实测，无需适配改动即可正常工作（宿主的 `webServer` / `commands` / `workspaceRegistry` / 技能 frontmatter 契约与技能根目录在 0.1.6-alpha.1 → 0.2.0-rc.2 之间均未变化）。
+- 修复「语言跟随」失效：`locale.getLocale()` 返回的快照字段是 `active`，此前误读为 `id`，导致**英文界面下本页仍显示中文**（该缺陷自 0.1.6 起就存在）。现在按 `active` 判定，并支持 `en-US` 这类区域标签。
+- 语言快照结构无法识别时改为回退到浏览器语言，而不再默默锁定中文。
+- 新增 4 项回归测试覆盖上述行为（共 92 项）。
+
 ## 0.2.0 — 2026-09-22
 
 - 从压缩包安装技能：支持 zip / tar / tar.gz，自动识别常见技能包布局（GitHub「Download ZIP」包裹目录、skillhub 的根 `SKILL.md` 整包、嵌套包装目录），deflate(method 8) 压缩也能正确解出；安装后弹出结果窗，区分「成功 / 部分成功 / 没有可安装技能 / 失败」，列出已安装与跳过清单。
