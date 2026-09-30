@@ -1,26 +1,26 @@
 # dsh-skills-manager-plus — awesome-dsh-plugin catalog entry
 #
-# 在 https://github.com/awesome-dsh-plugin/awesome-dsh-plugin 提 PR，
-# 把下面的对象加进插件列表（plugins.json 中数组的一项）即可。
-# 字段说明见 dshmarket 的 RegistryPlugin（registry.ts）：
-#   * 必填：name / owner / url / category(>=1) / description(多语言) / install / added
-#   * 可选：npm / tarball / stars / downloads
-#   * 有 npm 包时填 npm，市场安装优先走 npm；并建议发布 GitHub Release。
+# 状态：已收录。本插件已作为
+#   data/plugins/appthin__dsh-skills-manager-plus.yml
+# 存在于 https://github.com/awesome-dsh-plugin/awesome-dsh-plugin 的 main 分支，
+# 无需再提 PR。下面的对象即当前线上条目的内容（供对照）。
 #
-# 此文件仅为草稿，无需提交进插件仓库；把内容粘到 awesome-dsh-plugin 的
-# 数据文件里即可。提交前把 added 与 description 再核对一次。
+# 字段说明见 dshmarket 的 RegistryPlugin（registry.ts）：
+#   * 必填：url / name / category / description.en
+#   * npm 映射由市场脚本从 npm registry 自动采集——不要在手写条目里加 npm: 键，
+#     校验会拒绝；已发布 npm 包时市场安装优先走 npm。
+#   * 截图在自己仓库声明 screenshots.json，本仓库已声明（screenshot*.jpg）。
+#   * GitHub Release（v0.2.1）已发布，源码安装走 `dsh plugin add` 即可。
 
 {
-  "name": "dsh-skills-manager-plus",
-  "owner": "appthin",
   "url": "https://github.com/appthin/dsh-skills-manager-plus",
-  "category": "utility",
+  "name": "appthin/dsh-skills-manager-plus",
+  "category": "skill",
   "description": {
-    "en": "Skills & commands manager for DeepSeek Harness: view, enable/disable, edit, delete and add skills across global and project scopes, and save reusable prompts as slash commands, all from the Settings sidebar.",
-    "zh": "DeepSeek Harness 的技能与命令管理：在设置侧边栏查看、启用/停用、编辑、删除与添加技能（支持全局与项目作用域），并把常用提示词保存为 / 命令快速调用。"
+    "en": "Manage DSH skills and commands from Settings: list, enable/disable, edit, delete and add skills across global and project scopes, and save reusable prompts as slash commands.",
+    "zh": "在 DSH 设置中管理技能与命令：跨全局与项目作用域查看、启用/停用、编辑、删除与添加技能，并把常用提示词保存为斜杠命令。"
   },
   "npm": "dsh-skills-manager-plus",
-  "tarball": "https://api.github.com/repos/appthin/dsh-skills-manager-plus/tarball/v0.1.0",
   "install": "dsh plugin --profile web add dsh-skills-manager-plus",
   "added": "2026-09-19"
 }
