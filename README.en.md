@@ -63,6 +63,42 @@ dsh plugin --profile web add <this repo directory>   # update (re-add overwrites
 dsh plugin --profile web remove dsh-skills-manager-plus # uninstall
 ```
 
+## Releasing and verifying
+
+A successful `npm publish` only means the registry accepted the upload — **not** that users can
+get it. The version may not be visible yet, the China mirror may not have synced, `gitHead` may
+point at a commit nobody has, or the market entry may have dropped. So verify after every release:
+
+```sh
+GITHUB_TOKEN=<token with repo scope> npm run verify:release
+```
+
+It checks, in order: npmjs has the version and `latest` points at it → `gitHead` really is a
+commit on the default branch → npmmirror carries the same version with a tarball shasum identical
+to npmjs → the GitHub Release is published → the market entry is still there. Add `--sync` to
+trigger the mirror sync first and poll until it lands:
+
+```sh
+GITHUB_TOKEN=... npm run verify:release -- --sync
+```
+
+On some networks `registry.npmjs.org` is DNS-hijacked (a self-signed `O=redirect-cnzz` cert, the
+local resolver answering `103.73.220.138`) or simply unreachable, while `registry.npmmirror.com`
+works. Route both publish and verify through a local SOCKS proxy:
+
+```sh
+npm publish --registry=https://registry.npmjs.org/ --https-proxy=socks5h://127.0.0.1:1080 --proxy=socks5h://127.0.0.1:1080
+
+# With npm run, use VERIFY_PROXY: npm swallows a literal --proxy as its own config flag.
+VERIFY_PROXY=socks5h://127.0.0.1:1080 GITHUB_TOKEN=... npm run verify:release
+# Invoking the script directly can use --proxy.
+node scripts/verify-release.mjs --proxy socks5h://127.0.0.1:1080
+```
+
+⚠️ **Never** disable `strict-ssl` to get past the certificate error — that hands your npm token to
+whoever is intercepting. Going through the proxy gets you the real certificate. Full option
+reference is in the header comment of `scripts/verify-release.mjs`.
+
 ## Where things live
 
 Skills are the skill filesystem itself — the same roots the DSH skill provider scans:
@@ -96,7 +132,7 @@ The plugin keeps one small state file (`$DSH_HOME/skills-manager-plus.json`) tra
 ## Development
 
 ```sh
-node test/run.mjs          # all tests (88) across several suites
+node test/run.mjs          # all tests (97) across several suites
 ```
 
 | Suite | Coverage |
@@ -121,6 +157,7 @@ Tests use only Node's built-in `node:test`.
 | `lib/commands.js` | Command store: file read/write, file watching, registration on the DSH command registry |
 | `lib/client.js` | Browser half: the settings page UI (hand-written lazy-CJS bundle, no build step) |
 | `cordis.patch.yml` | Bundle patch that inserts this plugin into a profile's layer stack |
+| `scripts/verify-release.mjs` | Post-release verification: npmjs / npmmirror / GitHub Release / market entry (not shipped in the package) |
 
 ## License
 

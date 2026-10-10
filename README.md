@@ -67,6 +67,39 @@ dsh plugin --profile web add <本仓库目录>             # 更新（重新 add
 dsh plugin --profile web remove dsh-skills-manager-plus # 卸载
 ```
 
+## 发布与验证
+
+`npm publish` 成功只说明 registry 收下了包，**不代表用户真能拿到**：版本可能还没展开、
+国内镜像没同步、`gitHead` 指向一个没推上去的提交、或者市场条目掉了。所以发布后必须验证：
+
+```sh
+GITHUB_TOKEN=<有 repo 权限的 token> npm run verify:release
+```
+
+依次检查：npmjs 有该版本且 `latest` 指向它 → `gitHead` 确实是默认分支上的提交 →
+npmmirror 同步到同一版本且 tarball 校验和与 npmjs 一致 → GitHub Release 已发布 →
+市场条目仍在。加 `--sync` 会先触发一次镜像同步再轮询等待：
+
+```sh
+GITHUB_TOKEN=... npm run verify:release -- --sync
+```
+
+国内网络下 `registry.npmjs.org` 可能被 DNS 劫持（表现为自签名证书 `O=redirect-cnzz`、
+本地 resolver 返回 `103.73.220.138`）或直接不可达，而 `registry.npmmirror.com` 正常。
+这时给发布和验证都挂上本机 SOCKS 代理即可：
+
+```sh
+npm publish --registry=https://registry.npmjs.org/ --https-proxy=socks5h://127.0.0.1:1080 --proxy=socks5h://127.0.0.1:1080
+
+# 注意：走 npm run 时必须用 VERIFY_PROXY——npm 会把字面量 --proxy 当成它自己的配置吞掉
+VERIFY_PROXY=socks5h://127.0.0.1:1080 GITHUB_TOKEN=... npm run verify:release
+# 直接node调用则可以用 --proxy
+node scripts/verify-release.mjs --proxy socks5h://127.0.0.1:1080
+```
+
+⚠️ **绝对不要**为了绕过证书报错去关 `strict-ssl`——那会把 npm token 发给劫持者。
+走代理拿到真证书才是对的。`scripts/verify-release.mjs` 顶部注释有完整参数说明。
+
 ## 配置写在哪里
 
 技能的「唯一真相」是技能文件系统本身 —— 与 DSH 的技能提供者扫描的根目录完全一致：
@@ -107,7 +140,7 @@ DSH 的命令注册表，无需重启。
 ## 开发
 
 ```sh
-node test/run.mjs          # 全部测试（88 项，跨多个套件）
+node test/run.mjs          # 全部测试（97 项，跨多个套件）
 ```
 
 | 套件 | 覆盖范围 |
@@ -132,6 +165,7 @@ node test/run.mjs          # 全部测试（88 项，跨多个套件）
 | `lib/commands.js` | 命令存储：命令文件读写、文件监视、注册到 DSH 命令注册表 |
 | `lib/client.js` | 浏览器端：设置页面 UI（手写 lazy-CJS bundle，无构建步骤） |
 | `cordis.patch.yml` | bundle 补丁，把本插件插入 profile 的层栈 |
+| `scripts/verify-release.mjs` | 发布后验证：npmjs / npmmirror / GitHub Release / 市场条目（不随包发布） |
 
 ## License
 
