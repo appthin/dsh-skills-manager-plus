@@ -172,3 +172,94 @@ test('an unrecognizable snapshot falls back to the browser instead of pinning Ch
   });
   assert.equal(label, 'Skills & Commands');
 });
+
+// ── dark-theme legibility ─────────────────────────────────────────────────────
+//
+// `--dsw-alias-brand-primary` inverts between themes: #0f1115 (near-black) on
+// light, #f9fafb (near-white) on dark. Any literal foreground placed on it is
+// therefore invisible in one of the two themes, and any literal surface breaks
+// the theme's own contrast pairs. These tests pin the invariants that keep the
+// page legible in both.
+
+/** The full stylesheet the bundle injects, as one string. */
+async function stylesheet() {
+  const { styles } = await loadClientBundle();
+  return styles.map((s) => s.textContent).join('\n');
+}
+
+/** Declarations of the first rule whose selector matches exactly. */
+function ruleBody(css, selector) {
+  const at = css.indexOf(`${selector}{`);
+  assert.notEqual(at, -1, `rule ${selector} must exist`);
+  const end = css.indexOf('}', at);
+  return css.slice(at + selector.length + 1, end);
+}
+
+test('the primary button label inverts with the brand accent it sits on', async () => {
+  const css = await stylesheet();
+  const rule = ruleBody(css, '.smp-btn-primary');
+  assert.match(rule, /background:var\(--dsw-alias-brand-primary\)/, 'sits on the brand accent');
+  // The label must come from the token that inverts alongside brand-primary.
+  assert.match(rule, /color:var\(--dsw-alias-bg-base\)/, 'label must be a theme token');
+  assert.doesNotMatch(rule, /color:#/, 'a literal colour is invisible in one theme');
+});
+
+test('the dialog uses the harness panel surface and its theme-aware scrim', async () => {
+  const css = await stylesheet();
+  const modal = ruleBody(css, '.smp-modal');
+  // `bg-overlay` is mid-grey on dark, dropping secondary and state-coloured text
+  // to 1.8–3.9:1; `bg-layer-2` is the harness's own panel surface.
+  assert.match(modal, /background:var\(--dsw-alias-bg-layer-2\)/);
+  assert.doesNotMatch(modal, /background:var\(--dsw-alias-bg-overlay\)/);
+  const overlay = ruleBody(css, '.smp-overlay');
+  assert.match(overlay, /background:var\(--dsw-alias-bg-mask-1\)/, 'scrim must be the theme scrim');
+  assert.doesNotMatch(overlay, /background:rgba?\(/, 'a literal black scrim is invisible on dark');
+});
+
+test('the switch knob and both tracks are theme tokens that contrast', async () => {
+  const css = await stylesheet();
+  const track = ruleBody(css, '.smp-switch');
+  const knob = ruleBody(css, '.smp-switch i');
+  const on = ruleBody(css, '.smp-switch[data-on="true"]');
+  // A hairline border token is far too faint as a 38x22 track fill.
+  assert.doesNotMatch(track, /background:var\(--dsw-alias-border-l2\)/);
+  assert.match(track, /background:var\(--dsw-alias-label-secondary\)/);
+  assert.match(on, /background:var\(--dsw-alias-state-success-primary\)/);
+  // The knob must invert with the theme. The design system's own `switch-thumb`
+  // is #adb2b8 on dark, which is 1.07:1 against the fixed green track.
+  assert.match(knob, /background:var\(--dsw-alias-bg-base\)/);
+  assert.doesNotMatch(knob, /background:#/, 'a literal knob is invisible in one theme');
+});
+
+test('the install-result headline is label text with the tone on the icon', async () => {
+  const css = await stylesheet();
+  const head = ruleBody(css, '.smp-result-head');
+  assert.match(head, /color:var\(--dsw-alias-label-primary\)/, 'headline must be legible text');
+  // As text, the fixed state colours fell to 1.76-2.55:1 on the dark dialog.
+  for (const [tone, token] of [['ok', 'state-success'], ['bad', 'state-error'], ['warn', 'state-warn']]) {
+    const rule = ruleBody(css, `.smp-result-${tone} svg`);
+    assert.match(rule, new RegExp(`color:var\\(--dsw-alias-${token}-primary\\)`), `${tone} tones the icon`);
+  }
+});
+
+test('no themed colour in the stylesheet is a literal', async () => {
+  const css = await stylesheet();
+  // The spark avatar sits on a fixed, theme-independent palette rather than a
+  // themed surface, so its white glyph is legitimate.
+  const DECORATIVE = new Set(['.smp-spark']);
+  const offenders = [];
+  for (const chunk of css.split('}')) {
+    const brace = chunk.indexOf('{');
+    if (brace === -1) continue;
+    const selector = chunk.slice(0, brace).trim();
+    if (DECORATIVE.has(selector)) continue;
+    for (const decl of chunk.slice(brace + 1).split(';')) {
+      const match = /^\s*(color|background|background-color|border-color)\s*:\s*(.+)$/.exec(decl);
+      if (match === null) continue;
+      const value = match[2].trim();
+      if (value.startsWith('var(') || ['transparent', 'inherit', 'currentColor'].includes(value)) continue;
+      offenders.push(`${selector} { ${match[1]}: ${value} }`);
+    }
+  }
+  assert.deepEqual(offenders, [], 'themed colours must come from --dsw-* tokens');
+});
