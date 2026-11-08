@@ -10,7 +10,7 @@
 #   * npm 映射由市场脚本从 npm registry 自动采集——不要在手写条目里加 npm: 键，
 #     校验会拒绝；已发布 npm 包时市场安装优先走 npm。
 #   * 截图在自己仓库声明 screenshots.json，本仓库已声明（screenshot*.jpg）。
-#   * GitHub Release（v0.2.1）已发布，源码安装走 `dsh plugin add` 即可。
+#   * GitHub Release（v0.2.3）已发布，源码安装走 `dsh plugin add` 即可。
 
 {
   "url": "https://github.com/appthin/dsh-skills-manager-plus",

@@ -33,8 +33,10 @@ function seededRequire(name) {
 }
 
 async function loadClientBundle(options = {}) {
-  const { locale, navigatorLanguages } = options;
+  const { locale, navigatorLanguages, navCells, seatLive } = options;
   const registrations = [];
+  const iconInjections = [];
+  const iconRegistrations = [];
   const effects = [];
   const styles = [];
   const listeners = new Map();
@@ -46,7 +48,14 @@ async function loadClientBundle(options = {}) {
     addEventListener: (type, fn) => listeners.set(type, fn),
     removeEventListener: (type) => listeners.delete(type),
     documentElement: { appendChild: () => {} },
-    querySelectorAll: () => [],
+    querySelectorAll: (selector) => {
+      if (navCells === undefined) return [];
+      if (selector === 'button[class*="navCell"]') return navCells;
+      if (selector === 'button[data-skillsmp-nav]') {
+        return navCells.filter((cell) => cell.hasAttribute('data-skillsmp-nav'));
+      }
+      return [];
+    },
   };
   globalThis.document = documentStub;
   if (globalThis.MutationObserver === undefined) {
@@ -90,10 +99,24 @@ async function loadClientBundle(options = {}) {
     effect(factory) { const dispose = factory(); effects.push(dispose); return dispose; },
     slots: {
       inject(slot, factory) {
+        if (slot === 'settings.section.icon') {
+          // A shell that declares the seat runs the factory; one that predates
+          // the seat parks it, and neither may throw. `seatLive` picks which.
+          iconInjections.push(factory);
+          if (seatLive === true) factory();
+          return () => {};
+        }
         assert.equal(slot, 'settings.section');
         registrations.push(factory());
+        return () => {};
       },
       register(spec, component) {
+        if (spec.name === 'settings.section.icon') {
+          assert.equal(spec.id, 'skills', 'the icon seat is matched by the section id');
+          assert.equal(typeof component, 'function');
+          iconRegistrations.push({ spec, component });
+          return spec;
+        }
         assert.equal(spec.name, 'settings.section');
         assert.equal(typeof spec.label, 'function');
         assert.equal(typeof component, 'function');
@@ -109,7 +132,7 @@ async function loadClientBundle(options = {}) {
   delete globalThis.localStorage;
   delete globalThis.navigator;
 
-  return { exports, registrations, effects, styles };
+  return { exports, registrations, iconInjections, iconRegistrations, effects, styles };
 }
 
 test('client bundle loads and registers a settings.section page', async () => {
@@ -127,6 +150,62 @@ test('client bundle loads and registers a settings.section page', async () => {
   for (const dispose of effects) {
     if (typeof dispose === 'function') dispose();
   }
+});
+
+/**
+ * A stand-in for one shell nav cell: enough for the legacy tagging path, which
+ * only reads the label and writes one attribute.
+ */
+function navCell(text) {
+  const attributes = new Set();
+  return {
+    textContent: text,
+    hasAttribute: (name) => attributes.has(name),
+    setAttribute: (name) => attributes.add(name),
+    removeAttribute: (name) => attributes.delete(name),
+  };
+}
+
+// ── settings nav row icon ─────────────────────────────────────────────────────
+//
+// The shell owns the row markup. A current shell declares
+// `settings.section.icon`, renders whatever is registered for that row's id
+// inside its own icon span, and keeps its generic gear only when nothing is
+// registered. Shells that predate the seat need the other path: the row is
+// found, flagged, and the gear hidden by CSS. Painting both is the regression
+// these tests cover — the row carried two glyphs.
+
+test('the nav icon registers into the shell seat for the skills row', async () => {
+  const { iconInjections, iconRegistrations } = await loadClientBundle({ seatLive: true });
+  assert.equal(iconInjections.length, 1, 'the icon seat is injected exactly once');
+  assert.equal(iconRegistrations.length, 1, 'a shell that declares the seat registers one icon');
+  const { spec, component } = iconRegistrations[0];
+  assert.equal(spec.name, 'settings.section.icon');
+  assert.equal(spec.id, 'skills', 'the shell matches the icon by the section id');
+  const svg = component({ size: 16, active: true });
+  assert.equal(svg.type, 'svg');
+  assert.equal(svg.props.width, 16, 'the seat square is honoured');
+  assert.equal(svg.props.height, 16);
+  assert.equal(svg.props.fill, 'none');
+  // The React stand-in keeps a child array as one child slot, so the glyph's
+  // mapped paths arrive as that single entry.
+  const paths = svg.children[0];
+  assert.equal(paths.length, 2, 'the spark is two filled paths');
+  for (const path of paths) {
+    assert.equal(path.props.fill, 'currentColor', 'the row colour paints the glyph');
+  }
+});
+
+test('a shell without the seat still flags its row for the stylesheet glyph', async () => {
+  const cells = [navCell('技能与命令')];
+  await loadClientBundle({ navCells: cells });
+  assert.ok(cells[0].hasAttribute('data-skillsmp-nav'), 'the legacy path tags the row');
+});
+
+test('a shell with the seat never flags its row, so no second glyph is painted', async () => {
+  const cells = [navCell('技能与命令')];
+  await loadClientBundle({ navCells: cells, seatLive: true });
+  assert.equal(cells[0].hasAttribute('data-skillsmp-nav'), false, 'the seat owns the row icon');
 });
 
 /**
